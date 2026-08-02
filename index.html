@@ -14,45 +14,34 @@
 
     <div class="app-wrapper">
         <main class="main-terminal">
-            <header class="main-header">
-                <div class="title-group">
-                    <div class="logo-badge">
-                        <span class="logo-symbol">❖</span>
-                        <span class="project-title">IBONARIUM.TV.PROJECT : VISUAL.PLANET.MEMORY</span>
+            <!-- Compact Header & Control Bar -->
+            <header class="compact-header">
+                <div class="brand-group">
+                    <span class="logo-symbol">❖</span>
+                    <div class="brand-titles">
+                        <span class="project-title">IBONARIUM.TV</span>
+                        <h1 class="main-title">ВІЗУАЛЬНА ПАМʼЯТЬ ПЛАНЕТИ</h1>
                     </div>
-                    <h1>ВІЗУАЛЬНА ПАМʼЯТЬ <br> ПЛАНЕТИ</h1>
                 </div>
 
-                <div class="header-metrics">
-                    <div class="mini-stat"><span>IBONARIUM:</span> <span class="v">TV STREAM</span></div>
-                    <div class="mini-stat"><span>LAVANDA</span> <span class="v">AUDIT LAB</span></div>
-                    <div class="mini-stat"><span>STATUS:</span> <span class="v status-live">● LIVE</span></div>
-                </div>
-            </header>
-
-            <!-- Time Control Section -->
-            <section class="time-control">
-                <div class="date-selector">
-                    <div class="input-block">
-                        <label>Оберіть часовий вектор</label>
-                        <div class="select-container">
-                            <select id="daySelect"></select>
-                            <select id="monthSelect"></select>
-                            <select id="yearSelect"></select>
-                        </div>
+                <div class="compact-controls">
+                    <div class="select-container">
+                        <select id="daySelect"></select>
+                        <select id="monthSelect"></select>
+                        <select id="yearSelect"></select>
                     </div>
                     <div class="button-group">
                         <button class="fetch-btn" id="exploreBtn">ЗАПУСТИТИ</button>
-                        <button class="fetch-btn secondary" id="randomBtn">ВИПАДКОВИЙ ДЕНЬ</button>
+                        <button class="fetch-btn secondary" id="randomBtn">🎲 ВИПАДКОВИЙ</button>
                     </div>
                 </div>
-            </section>
+            </header>
 
-            <!-- Centered Media Content -->
+            <!-- Centered Screen & Atmosphere Content -->
             <section id="resultContainer" class="hidden">
                 <div class="player-container-wrapper">
-                    <!-- Hero Event / AI Summary -->
-                    <div class="memory-block full-width atmosphere-card">
+                    <!-- Atmosphere Card -->
+                    <div class="memory-block atmosphere-card">
                         <div class="block-header">
                             <span class="block-tag">АТМОСФЕРА ДНЯ</span>
                             <span id="displayDate">--.--.----</span>
@@ -62,24 +51,24 @@
                         </div>
                     </div>
 
-                    <!-- Visual Data: Video Player -->
+                    <!-- Screen / Video Player Card -->
                     <div class="memory-block video-player-card">
                         <div class="block-header">
-                            <span class="block-tag">VIDEO | ХРОНІКА</span>
+                            <span class="block-tag">ЕКРАН | ХРОНІКА</span>
                             <span id="playerStatus" class="player-status-tag">АВТО-ПОТОК</span>
                         </div>
                         <div class="media-container" id="videoMedia"></div>
                         <div class="player-controls-bar">
                             <p id="videoDesc" class="media-desc"></p>
-                            <button id="nextVideoBtn" class="next-btn" title="Завантажити наступне відео">⏭ НАСТУПНЕ ВІДЕО</button>
+                            <button id="nextVideoBtn" class="next-btn" title="Наступне відео">⏭ НАСТУПНЕ ВІДЕО</button>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <div id="loader" class="hidden" style="text-align: center; padding: 2rem;">
+            <div id="loader" class="hidden loader-container">
                 <div class="status-dot"></div>
-                <p style="font-family: 'Syncopate'; font-size: 0.7rem; color: var(--acc-cyan); letter-spacing: 2px;">ПОШУК ВІДЕО-ХРОНІКИ...</p>
+                <p class="loader-text">ПОШУК ВІДЕО-ХРОНІКИ...</p>
             </div>
         </main>
     </div>

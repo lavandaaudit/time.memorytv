@@ -1,0 +1,445 @@
+const daySelect = document.getElementById('daySelect');
+const monthSelect = document.getElementById('monthSelect');
+const yearSelect = document.getElementById('yearSelect');
+const exploreBtn = document.getElementById('exploreBtn');
+const randomBtn = document.getElementById('randomBtn');
+const nextVideoBtn = document.getElementById('nextVideoBtn');
+const resultContainer = document.getElementById('resultContainer');
+const loader = document.getElementById('loader');
+const playerStatus = document.getElementById('playerStatus');
+
+let autoAdvanceTimer = null;
+let videoTimeoutTimer = null;
+let currentYear = 2026;
+
+// Global Canvas (Background Stars)
+const canvas = document.getElementById('starsCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- Web Audio Engine ---
+let audioCtx = null;
+let delayNode, feedbackGain, reverbNode, reverbGain, chorusNode, chorusLFO, droneOsc, droneGain;
+let masterGain;
+
+function initAudio() {
+    if (audioCtx) return;
+    try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0.8;
+        masterGain.connect(audioCtx.destination);
+
+        // Chorus
+        chorusNode = audioCtx.createDelay();
+        chorusNode.delayTime.value = 0.02;
+        chorusLFO = audioCtx.createOscillator();
+        const lfoGain = audioCtx.createGain();
+        chorusLFO.frequency.value = 0.5;
+        lfoGain.gain.value = 0.003;
+        chorusLFO.connect(lfoGain);
+        lfoGain.connect(chorusNode.delayTime);
+        chorusLFO.start();
+
+        // Delay with Feedback
+        delayNode = audioCtx.createDelay(2.0);
+        delayNode.delayTime.value = 0.4;
+        feedbackGain = audioCtx.createGain();
+        feedbackGain.gain.value = 0.3;
+
+        delayNode.connect(feedbackGain);
+        feedbackGain.connect(delayNode);
+
+        // Reverb
+        reverbNode = audioCtx.createConvolver();
+        reverbGain = audioCtx.createGain();
+        reverbGain.gain.value = 0.5;
+        createReverbPulse();
+
+        // FX Chain
+        chorusNode.connect(delayNode);
+        delayNode.connect(reverbGain);
+        reverbGain.connect(masterGain);
+
+        // Ambient Drone
+        droneOsc = audioCtx.createOscillator();
+        droneOsc.type = 'sawtooth';
+        droneOsc.frequency.value = 55;
+        droneGain = audioCtx.createGain();
+        droneGain.gain.value = 0.05;
+
+        const droneLowpass = audioCtx.createBiquadFilter();
+        droneLowpass.type = 'lowpass';
+        droneLowpass.frequency.value = 150;
+
+        droneOsc.connect(droneLowpass);
+        droneLowpass.connect(droneGain);
+        droneGain.connect(masterGain);
+        droneOsc.start();
+    } catch (e) {
+        console.warn("Web Audio Initialization failed:", e);
+    }
+}
+
+async function createReverbPulse() {
+    if (!audioCtx) return;
+    const len = audioCtx.sampleRate * 2.5;
+    const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+        const data = buf.getChannelData(c);
+        for (let i = 0; i < len; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.5);
+        }
+    }
+    reverbNode.buffer = buf;
+}
+
+function connectAudioSource(element) {
+    if (!audioCtx) initAudio();
+    if (element.captured) return true;
+
+    try {
+        const source = audioCtx.createMediaElementSource(element);
+        source.connect(masterGain);
+        source.connect(chorusNode);
+        element.captured = true;
+        return true;
+    } catch (e) {
+        console.warn("Audio capture blocked (CORS):", e);
+        return false;
+    }
+}
+
+// --- Global Stars ---
+let stars = [];
+function initStars() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    stars = [];
+    for (let i = 0; i < 200; i++) {
+        stars.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: Math.random() * 1.5,
+            speed: Math.random() * 0.05 + 0.02,
+            hue: Math.random() * 360
+        });
+    }
+}
+
+function animateStars() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+        s.y += s.speed;
+        s.hue += 0.1;
+        if (s.y > canvas.height) s.y = 0;
+        ctx.fillStyle = `hsl(${s.hue}, 70%, 70%)`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    requestAnimationFrame(animateStars);
+}
+
+// --- Data Selectors ---
+function initSelectors() {
+    daySelect.innerHTML = ''; monthSelect.innerHTML = ''; yearSelect.innerHTML = '';
+    for (let i = 1; i <= 31; i++) {
+        const val = i.toString().padStart(2, '0');
+        daySelect.add(new Option(val, val));
+    }
+    for (let i = 1; i <= 12; i++) {
+        const val = i.toString().padStart(2, '0');
+        monthSelect.add(new Option(val, val));
+    }
+    for (let i = 2026; i >= 1900; i--) {
+        yearSelect.add(new Option(i, i.toString()));
+    }
+    yearSelect.value = "1995";
+}
+
+function setRandomDate() {
+    const minYear = 1950;
+    const maxYear = 2025;
+
+    const startTs = new Date(minYear, 0, 1).getTime();
+    const endTs = new Date(maxYear, 11, 31).getTime();
+    const randomTs = startTs + Math.random() * (endTs - startTs);
+    const date = new Date(randomTs);
+
+    const y = date.getFullYear().toString();
+    const m = (date.getMonth() + 1).toString().padStart(2, '0');
+    const d = date.getDate().toString().padStart(2, '0');
+
+    if (yearSelect.querySelector(`option[value="${y}"]`)) yearSelect.value = y;
+    monthSelect.value = m;
+    daySelect.value = d;
+}
+
+function clearAllTimers() {
+    if (autoAdvanceTimer) {
+        clearTimeout(autoAdvanceTimer);
+        autoAdvanceTimer = null;
+    }
+    if (videoTimeoutTimer) {
+        clearTimeout(videoTimeoutTimer);
+        videoTimeoutTimer = null;
+    }
+}
+
+function loadNextVideo() {
+    clearAllTimers();
+    setRandomDate();
+    exploreBtn.click();
+}
+
+// Initialization flow
+initStars();
+animateStars();
+initSelectors();
+
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        setRandomDate();
+        exploreBtn.click();
+        initAudio();
+    }, 500);
+});
+
+randomBtn.onclick = () => {
+    loadNextVideo();
+};
+
+if (nextVideoBtn) {
+    nextVideoBtn.onclick = () => {
+        loadNextVideo();
+    };
+}
+
+window.onresize = () => {
+    initStars();
+};
+
+exploreBtn.onclick = async () => {
+    clearAllTimers();
+    const d = daySelect.value;
+    const m = monthSelect.value;
+    const y = yearSelect.value;
+    currentYear = parseInt(y);
+    const selectedDate = `${y}-${m}-${d}`;
+
+    resultContainer.classList.add('hidden');
+    loader.classList.remove('hidden');
+    if (playerStatus) playerStatus.textContent = "ЗАВАНТАЖЕННЯ...";
+
+    try {
+        const [archiveVideo, atmosphere] = await Promise.all([
+            fetchArchiveVideo(selectedDate),
+            generateAtmosphereSummary(selectedDate)
+        ]);
+        renderResults(selectedDate, archiveVideo, atmosphere);
+    } catch (error) {
+        console.error("Explore error:", error);
+        handleVideoFailure("ПОМИЛКА. ОНОВЛЕННЯ...");
+    } finally {
+        loader.classList.add('hidden');
+        resultContainer.classList.remove('hidden');
+    }
+};
+
+async function fetchArchiveVideo(date) {
+    const year = date.split('-')[0];
+    const month = date.split('-')[1];
+
+    const searchArchive = async (query, limit = 5) => {
+        const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}&output=json&limit=${limit}`;
+        try {
+            const res = await fetch(url);
+            return await res.json();
+        } catch (e) { return { response: { docs: [] } }; }
+    };
+
+    try {
+        let items = [];
+
+        // 1. Try exact date
+        let data = await searchArchive(`date:${date} AND mediatype:movies`);
+        items = data.response.docs;
+
+        // 2. Try month of year
+        if (!items || items.length === 0) {
+            data = await searchArchive(`year:${year} AND date:${year}-${month}* AND mediatype:movies`, 10);
+            items = data.response.docs;
+        }
+
+        // 3. Try whole year
+        if (!items || items.length === 0) {
+            data = await searchArchive(`year:${year} AND mediatype:movies`, 50);
+            items = data.response.docs;
+        }
+
+        if (!items || items.length === 0) {
+            return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null };
+        }
+
+        const item = items[Math.floor(Math.random() * items.length)];
+
+        try {
+            const metaRes = await fetch(`https://archive.org/metadata/${item.identifier}`);
+            const metaData = await metaRes.json();
+            let duration = 0;
+            let videoUrl = null;
+
+            if (metaData.files) {
+                const videoFile = metaData.files.find(f => f.format === 'h.264' || f.format === 'MPEG4' || (f.name && f.name.toLowerCase().endsWith('.mp4')));
+                if (videoFile) {
+                    duration = parseFloat(videoFile.duration) || 0;
+                    videoUrl = `https://archive.org/download/${item.identifier}/${encodeURIComponent(videoFile.name)}`;
+                }
+            }
+            return { title: item.title, id: item.identifier, duration: duration || 45, url: videoUrl };
+        } catch (e) {
+            return { title: item.title, id: item.identifier, duration: 45, url: null };
+        }
+
+    } catch (e) {
+        console.error("Archive Search Error:", e);
+        return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null };
+    }
+}
+
+async function generateAtmosphereSummary(date) {
+    const dStr = date.split('-').reverse().join('.');
+    return `Аналітичний звіт ${dStr}. Спектральний аналіз завершено. Рівень фонової активності стабільний.`;
+}
+
+function handleVideoFailure(reason = "ПОМИЛКА ЗАВАНТАЖЕННЯ. НАСТУПНЕ ВІДЕО...") {
+    console.warn("Video playback failure:", reason);
+    if (playerStatus) playerStatus.textContent = reason;
+    clearAllTimers();
+    autoAdvanceTimer = setTimeout(() => {
+        loadNextVideo();
+    }, 1500);
+}
+
+function renderResults(date, video, atmosphere) {
+    document.getElementById('displayDate').textContent = date.split('-').reverse().join('.');
+    document.getElementById('aiAtmosphere').textContent = atmosphere;
+    document.getElementById('videoDesc').textContent = video.title || "Хроніка часу";
+
+    const videoMedia = document.getElementById('videoMedia');
+    videoMedia.innerHTML = '';
+
+    if (playerStatus) playerStatus.textContent = "АВТО-ПОТОК ● LIVE";
+
+    // If no video was found for date, auto-retry next video immediately
+    if (!video.url && !video.id) {
+        handleVideoFailure("ВІДЕО НЕ ЗНАЙДЕНО. ПЕРЕМИКАННЯ...");
+        videoMedia.innerHTML = `<div class="no-video-placeholder"><p>ПОШУК ВІДЕО-ХРОНІКИ...</p></div>`;
+        return;
+    }
+
+    if (video.url) {
+        const v = document.createElement('video');
+        v.src = video.url;
+        v.autoplay = true;
+        v.muted = true;
+        v.controls = true;
+        v.playsInline = true;
+        v.crossOrigin = "anonymous";
+        v.style.width = "100%";
+        v.style.height = "100%";
+        v.style.objectFit = "cover";
+        v.style.backgroundColor = "#000";
+
+        // Setup safety load timeout: if video stays stalled/unloaded for > 8s
+        videoTimeoutTimer = setTimeout(() => {
+            if (v.readyState < 2) {
+                console.warn("Video loading timeout (>8s). Attempting fallback / next video...");
+                if (video.id) {
+                    loadIframeFallback(videoMedia, video);
+                } else {
+                    handleVideoFailure("ТАЙМАУТ ВІДЕО. ОНОВЛЕННЯ...");
+                }
+            }
+        }, 8000);
+
+        v.onplaying = () => {
+            if (videoTimeoutTimer) clearTimeout(videoTimeoutTimer);
+            if (playerStatus) playerStatus.textContent = "ПОТІК АКТИВНИЙ ● LIVE";
+        };
+
+        v.onplay = () => {
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            try { connectAudioSource(v); } catch (e) { }
+        };
+
+        // Automatic update when video finishes playing
+        v.onended = () => {
+            console.log("Video completed. Loading next video...");
+            if (playerStatus) playerStatus.textContent = "ВІДЕО ЗАВЕРШЕНО. НАСТУПНЕ...";
+            loadNextVideo();
+        };
+
+        // Automatic recovery on video load/playback error
+        v.onerror = () => {
+            console.warn("Video failed to play. Trying iframe fallback or next video...");
+            if (video.id) {
+                loadIframeFallback(videoMedia, video);
+            } else {
+                handleVideoFailure("ПОМИЛКА ВІДЕО. ОНОВЛЕННЯ...");
+            }
+        };
+
+        videoMedia.appendChild(v);
+        addFullscreenButton(videoMedia);
+
+    } else if (video.id) {
+        loadIframeFallback(videoMedia, video);
+    }
+}
+
+function loadIframeFallback(container, video) {
+    if (playerStatus) playerStatus.textContent = "ПОТІК EMBED ● LIVE";
+    container.innerHTML = `<iframe id="activeIframe" src="https://archive.org/embed/${video.id}?autoplay=1&mute=1" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+    addFullscreenButton(container);
+
+    // For iframe fallback, set auto-advance timer based on duration (or fallback 45s)
+    const dur = (video.duration && video.duration > 5) ? video.duration : 45;
+    clearAllTimers();
+    autoAdvanceTimer = setTimeout(() => {
+        console.log("Iframe duration completed. Loading next video...");
+        loadNextVideo();
+    }, dur * 1000);
+}
+
+function addFullscreenButton(container) {
+    const btn = document.createElement('button');
+    btn.innerHTML = '⛶';
+    btn.title = "Повний екран";
+    btn.style.position = 'absolute';
+    btn.style.top = '10px';
+    btn.style.right = '10px';
+    btn.style.background = 'rgba(0, 0, 0, 0.7)';
+    btn.style.color = '#00f3ff';
+    btn.style.border = '1px solid #00f3ff';
+    btn.style.padding = '6px 10px';
+    btn.style.cursor = 'pointer';
+    btn.style.zIndex = '100';
+    btn.style.fontSize = '14px';
+    btn.style.borderRadius = '3px';
+
+    btn.onclick = () => {
+        const elem = container.querySelector('video') || container.querySelector('iframe') || container;
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+            elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+            elem.msRequestFullscreen();
+        } else if (container.requestFullscreen) {
+            container.requestFullscreen();
+        }
+    };
+    container.appendChild(btn);
+}

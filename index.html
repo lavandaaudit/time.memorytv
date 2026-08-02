@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VISUAL PLANET MEMORY | IBONARIUM LAB</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <canvas id="starsCanvas"></canvas>
+    <div class="glow-orb"></div>
+
+    <div class="app-wrapper">
+        <main class="main-terminal">
+            <header class="main-header">
+                <div class="title-group">
+                    <div class="logo-badge">
+                        <span class="logo-symbol">❖</span>
+                        <span class="project-title">IBONARIUM.TV.PROJECT : VISUAL.PLANET.MEMORY</span>
+                    </div>
+                    <h1>ВІЗУАЛЬНА ПАМʼЯТЬ <br> ПЛАНЕТИ</h1>
+                </div>
+
+                <div class="header-metrics">
+                    <div class="mini-stat"><span>IBONARIUM:</span> <span class="v">TV STREAM</span></div>
+                    <div class="mini-stat"><span>LAVANDA</span> <span class="v">AUDIT LAB</span></div>
+                    <div class="mini-stat"><span>STATUS:</span> <span class="v status-live">● LIVE</span></div>
+                </div>
+            </header>
+
+            <!-- Time Control Section -->
+            <section class="time-control">
+                <div class="date-selector">
+                    <div class="input-block">
+                        <label>Оберіть часовий вектор</label>
+                        <div class="select-container">
+                            <select id="daySelect"></select>
+                            <select id="monthSelect"></select>
+                            <select id="yearSelect"></select>
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button class="fetch-btn" id="exploreBtn">ЗАПУСТИТИ</button>
+                        <button class="fetch-btn secondary" id="randomBtn">ВИПАДКОВИЙ ДЕНЬ</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Centered Media Content -->
+            <section id="resultContainer" class="hidden">
+                <div class="player-container-wrapper">
+                    <!-- Hero Event / AI Summary -->
+                    <div class="memory-block full-width atmosphere-card">
+                        <div class="block-header">
+                            <span class="block-tag">АТМОСФЕРА ДНЯ</span>
+                            <span id="displayDate">--.--.----</span>
+                        </div>
+                        <div id="aiAtmosphere" class="ai-summary">
+                            Координати часу зчитуються...
+                        </div>
+                    </div>
+
+                    <!-- Visual Data: Video Player -->
+                    <div class="memory-block video-player-card">
+                        <div class="block-header">
+                            <span class="block-tag">VIDEO | ХРОНІКА</span>
+                            <span id="playerStatus" class="player-status-tag">АВТО-ПОТОК</span>
+                        </div>
+                        <div class="media-container" id="videoMedia"></div>
+                        <div class="player-controls-bar">
+                            <p id="videoDesc" class="media-desc"></p>
+                            <button id="nextVideoBtn" class="next-btn" title="Завантажити наступне відео">⏭ НАСТУПНЕ ВІДЕО</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div id="loader" class="hidden" style="text-align: center; padding: 2rem;">
+                <div class="status-dot"></div>
+                <p style="font-family: 'Syncopate'; font-size: 0.7rem; color: var(--acc-cyan); letter-spacing: 2px;">ПОШУК ВІДЕО-ХРОНІКИ...</p>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

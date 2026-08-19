@@ -40,17 +40,16 @@
             <!-- Centered Screen & Atmosphere Content -->
             <section id="resultContainer" class="hidden">
                 <div class="player-container-wrapper">
-                    <!-- Atmosphere Card -->
+                    <!-- Compact Atmosphere Card -->
                     <div class="memory-block atmosphere-card">
-                        <div class="block-header">
+                        <div class="atmo-compact-row">
                             <span class="block-tag">АТМОСФЕРА ДНЯ</span>
-                            <span id="displayDate">--.--.----</span>
-                        </div>
-
-                        <div class="atmosphere-meta-grid">
-                            <div class="meta-badge"><span class="meta-icon">📅</span> <span id="atmoDayOfWeek">--</span></div>
-                            <div class="meta-badge"><span class="meta-icon">🌙</span> <span id="atmoMoon">--</span></div>
-                            <div class="meta-badge epoch"><span class="meta-icon">📜</span> <span id="atmoEpoch">--</span></div>
+                            <div class="atmosphere-meta-grid">
+                                <div class="meta-badge"><span class="meta-icon">📅</span> <span id="atmoDayOfWeek">--</span></div>
+                                <div class="meta-badge"><span class="meta-icon">🌙</span> <span id="atmoMoon">--</span></div>
+                                <div class="meta-badge epoch"><span class="meta-icon">📜</span> <span id="atmoEpoch">--</span></div>
+                            </div>
+                            <span id="displayDate" class="atmo-date">--.--.----</span>
                         </div>
 
                         <div id="aiAtmosphere" class="ai-summary">
@@ -67,10 +66,7 @@
                         <div class="media-container" id="videoMedia"></div>
                         <div class="player-controls-bar">
                             <p id="videoDesc" class="media-desc"></p>
-                            <div class="controls-right-group">
-                                <button id="ambientToggleBtn" class="sound-toggle-btn" title="Переключити ембієнт-звук">🔊 ЕМБІЄНТ: УВІМК</button>
-                                <button id="nextVideoBtn" class="next-btn" title="Наступне відео">⏭ НАСТУПНЕ ВІДЕО</button>
-                            </div>
+                            <button id="nextVideoBtn" class="next-btn" title="Наступне відео">⏭ НАСТУПНЕ ВІДЕО</button>
                         </div>
                     </div>
 

@@ -257,7 +257,7 @@ select:hover, select:focus {
 .media-container iframe {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
 }
 
@@ -285,6 +285,35 @@ select:hover, select:focus {
     font-size: 0.75rem;
     color: #aaa;
     flex: 1;
+}
+
+.controls-right-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.sound-toggle-btn {
+    background: rgba(0, 243, 255, 0.1);
+    color: var(--acc-cyan);
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.8rem;
+    font-size: 0.58rem;
+    font-family: 'Syncopate', sans-serif;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.3s;
+}
+
+.sound-toggle-btn:hover {
+    border-color: var(--acc-cyan);
+    box-shadow: 0 0 8px rgba(0, 243, 255, 0.3);
+}
+
+.sound-toggle-btn.muted {
+    color: #888888;
+    border-color: rgba(255, 255, 255, 0.1);
+    background: transparent;
 }
 
 .next-btn {

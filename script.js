@@ -4,6 +4,7 @@ const yearSelect = document.getElementById('yearSelect');
 const exploreBtn = document.getElementById('exploreBtn');
 const randomBtn = document.getElementById('randomBtn');
 const nextVideoBtn = document.getElementById('nextVideoBtn');
+const ambientToggleBtn = document.getElementById('ambientToggleBtn');
 const resultContainer = document.getElementById('resultContainer');
 const loader = document.getElementById('loader');
 const playerStatus = document.getElementById('playerStatus');
@@ -11,6 +12,11 @@ const playerStatus = document.getElementById('playerStatus');
 let autoAdvanceTimer = null;
 let currentYear = 2026;
 let currentVideoElement = null;
+let isAmbientMuted = false;
+
+// Performance Caches for fast repeat searches
+const metadataCache = new Map();
+const searchCache = new Map();
 
 // Global Canvas (Background Stars)
 const canvas = document.getElementById('starsCanvas');
@@ -66,12 +72,12 @@ function initAudio() {
         delayNode.connect(reverbGain);
         reverbGain.connect(masterGain);
 
-        // Ambient Drone
+        // Ambient Space Drone
         droneOsc = audioCtx.createOscillator();
         droneOsc.type = 'sawtooth';
         droneOsc.frequency.value = 55;
         droneGain = audioCtx.createGain();
-        droneGain.gain.value = 0.05;
+        droneGain.gain.value = isAmbientMuted ? 0 : 0.05;
 
         const droneLowpass = audioCtx.createBiquadFilter();
         droneLowpass.type = 'lowpass';
@@ -99,21 +105,18 @@ async function createReverbPulse() {
     reverbNode.buffer = buf;
 }
 
-function connectAudioSource(element) {
-    if (!audioCtx) initAudio();
-    if (!element || element.captured) return true;
-
-    try {
-        const source = audioCtx.createMediaElementSource(element);
-        source.connect(masterGain);
-        source.connect(chorusNode);
-        element.captured = true;
-        return true;
-    } catch (e) {
-        console.warn("Audio capture skipped (CORS fallback active):", e);
-        return false;
+// Global user interaction listener to unlock AudioContext & Video Sound
+function unlockAudio() {
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    if (currentVideoElement) {
+        currentVideoElement.muted = false;
+        currentVideoElement.play().catch(() => {});
     }
 }
+document.addEventListener('click', unlockAudio, { once: true });
+document.addEventListener('touchstart', unlockAudio, { once: true });
 
 // --- Global Stars ---
 let stars = [];
@@ -212,13 +215,32 @@ window.addEventListener('load', () => {
 
 randomBtn.onclick = () => {
     initAudio();
+    unlockAudio();
     loadNextVideo();
 };
 
 if (nextVideoBtn) {
     nextVideoBtn.onclick = () => {
         initAudio();
+        unlockAudio();
         loadNextVideo();
+    };
+}
+
+if (ambientToggleBtn) {
+    ambientToggleBtn.onclick = () => {
+        initAudio();
+        isAmbientMuted = !isAmbientMuted;
+        if (droneGain) {
+            droneGain.gain.value = isAmbientMuted ? 0 : 0.05;
+        }
+        if (isAmbientMuted) {
+            ambientToggleBtn.textContent = '🔇 ЕМБІЄНТ: ВИМК';
+            ambientToggleBtn.classList.add('muted');
+        } else {
+            ambientToggleBtn.textContent = '🔊 ЕМБІЄНТ: УВІМК';
+            ambientToggleBtn.classList.remove('muted');
+        }
     };
 }
 
@@ -228,6 +250,7 @@ window.onresize = () => {
 
 exploreBtn.onclick = async () => {
     initAudio();
+    unlockAudio();
     clearAllTimers();
     const d = daySelect.value;
     const m = monthSelect.value;
@@ -237,7 +260,7 @@ exploreBtn.onclick = async () => {
 
     resultContainer.classList.add('hidden');
     loader.classList.remove('hidden');
-    if (playerStatus) playerStatus.textContent = "ПОШУК ХРОНІКИ...";
+    if (playerStatus) playerStatus.textContent = "ШВИДКИЙ ПОШУК...";
 
     try {
         const [archiveVideo, atmosphere] = await Promise.all([
@@ -254,84 +277,98 @@ exploreBtn.onclick = async () => {
     }
 };
 
+// --- OPTIMIZED PARALLEL ARCHIVE SEARCH & METADATA RESOLUTION ---
 async function fetchArchiveVideo(date) {
-    const year = date.split('-')[0];
-    const month = date.split('-')[1];
+    const [year, month] = date.split('-');
 
-    const searchArchive = async (query, limit = 15) => {
-        const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}&output=json&limit=${limit}`;
+    const searchUrl = (query, limit = 15) => 
+        `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}&fl[]=identifier,title,downloads&sort[]=downloads+desc&rows=${limit}&output=json`;
+
+    const fetchJson = async (url) => {
+        if (searchCache.has(url)) return searchCache.get(url);
         try {
             const res = await fetch(url);
-            return await res.json();
-        } catch (e) { return { response: { docs: [] } }; }
+            const data = await res.json();
+            searchCache.set(url, data);
+            return data;
+        } catch (e) {
+            return { response: { docs: [] } };
+        }
     };
 
     try {
-        let items = [];
+        const qExact = `date:${date} AND mediatype:movies`;
+        const qMonth = `year:${year} AND date:${year}-${month}* AND mediatype:movies`;
+        const qYear = `year:${year} AND mediatype:movies`;
 
-        // 1. Try exact date
-        let data = await searchArchive(`date:${date} AND mediatype:movies`);
-        items = data.response.docs || [];
+        // Run exact date & month search in parallel for fast resolution
+        let [dataExact, dataMonth] = await Promise.all([
+            fetchJson(searchUrl(qExact, 10)),
+            fetchJson(searchUrl(qMonth, 10))
+        ]);
 
-        // 2. Try month of year
+        let items = dataExact?.response?.docs || [];
+        if (!items.length) items = dataMonth?.response?.docs || [];
+
+        // Fallback to year search if exact & month had no records
         if (!items.length) {
-            data = await searchArchive(`year:${year} AND date:${year}-${month}* AND mediatype:movies`, 15);
-            items = data.response.docs || [];
-        }
-
-        // 3. Try whole year
-        if (!items.length) {
-            data = await searchArchive(`year:${year} AND mediatype:movies`, 50);
-            items = data.response.docs || [];
+            const dataYear = await fetchJson(searchUrl(qYear, 25));
+            items = dataYear?.response?.docs || [];
         }
 
         if (!items.length) {
             return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null };
         }
 
-        // Shuffle items to pick a random candidate
-        const shuffledItems = [...items].sort(() => Math.random() - 0.5);
+        // Shuffle top candidates to vary video selection
+        const candidateItems = [...items].sort(() => Math.random() - 0.5).slice(0, 4);
 
-        for (const item of shuffledItems.slice(0, 5)) {
-            try {
-                const metaRes = await fetch(`https://archive.org/metadata/${item.identifier}`);
-                const metaData = await metaRes.json();
-                let duration = 0;
-                let videoUrl = null;
-
-                if (metaData.files && metaData.files.length) {
-                    // Filter candidate video files: prioritize MP4 / WebM, avoid tiny sample clips if possible
-                    const videoFiles = metaData.files.filter(f => {
-                        const name = (f.name || '').toLowerCase();
-                        const format = (f.format || '').toLowerCase();
-                        const isVideo = format.includes('h.264') || format.includes('mpeg4') || format.includes('mp4') || format.includes('webm') || name.endsWith('.mp4') || name.endsWith('.webm');
-                        return isVideo;
-                    });
-
-                    // Sort: prefer main videos (not preview/sample, duration > 10s)
-                    videoFiles.sort((a, b) => {
-                        const aSample = (a.name || '').toLowerCase().includes('sample') || (a.name || '').toLowerCase().includes('thumb');
-                        const bSample = (b.name || '').toLowerCase().includes('sample') || (b.name || '').toLowerCase().includes('thumb');
-                        if (aSample && !bSample) return 1;
-                        if (!aSample && bSample) return -1;
-                        return (parseFloat(b.duration) || 0) - (parseFloat(a.duration) || 0);
-                    });
-
-                    const chosenFile = videoFiles[0];
-                    if (chosenFile) {
-                        duration = parseFloat(chosenFile.duration) || 0;
-                        const safePath = chosenFile.name.split('/').map(encodeURIComponent).join('/');
-                        videoUrl = `https://archive.org/download/${item.identifier}/${safePath}`;
-                        return { title: item.title, id: item.identifier, duration: duration || 45, url: videoUrl };
-                    }
+        // Parallel metadata fetch for all candidates
+        const metadataResults = await Promise.all(
+            candidateItems.map(item => {
+                if (metadataCache.has(item.identifier)) {
+                    return Promise.resolve({ item, metaData: metadataCache.get(item.identifier) });
                 }
+                return fetch(`https://archive.org/metadata/${item.identifier}`)
+                    .then(res => res.json())
+                    .then(metaData => {
+                        metadataCache.set(item.identifier, metaData);
+                        return { item, metaData };
+                    })
+                    .catch(() => null);
+            })
+        );
 
-                // If metadata files don't have direct video file, return item with id for embed fallback
-                if (item.identifier) {
-                    return { title: item.title, id: item.identifier, duration: 45, url: null };
+        for (const res of metadataResults) {
+            if (!res || !res.metaData) continue;
+            const { item, metaData } = res;
+
+            if (metaData.files && metaData.files.length) {
+                const videoFiles = metaData.files.filter(f => {
+                    const name = (f.name || '').toLowerCase();
+                    const format = (f.format || '').toLowerCase();
+                    return format.includes('h.264') || format.includes('mpeg4') || format.includes('mp4') || format.includes('webm') || name.endsWith('.mp4') || name.endsWith('.webm');
+                });
+
+                videoFiles.sort((a, b) => {
+                    const aSample = (a.name || '').toLowerCase().includes('sample') || (a.name || '').toLowerCase().includes('thumb');
+                    const bSample = (b.name || '').toLowerCase().includes('sample') || (b.name || '').toLowerCase().includes('thumb');
+                    if (aSample && !bSample) return 1;
+                    if (!aSample && bSample) return -1;
+                    return (parseFloat(b.duration) || 0) - (parseFloat(a.duration) || 0);
+                });
+
+                const chosenFile = videoFiles[0];
+                if (chosenFile) {
+                    const duration = parseFloat(chosenFile.duration) || 0;
+                    const safePath = chosenFile.name.split('/').map(encodeURIComponent).join('/');
+                    const videoUrl = `https://archive.org/download/${item.identifier}/${safePath}`;
+                    return { title: item.title, id: item.identifier, duration: duration || 45, url: videoUrl };
                 }
-            } catch (e) {
-                console.warn("Failed fetching metadata for item:", item.identifier, e);
+            }
+
+            if (item.identifier) {
+                return { title: item.title, id: item.identifier, duration: 45, url: null };
             }
         }
 
@@ -375,9 +412,10 @@ function renderResults(date, video, atmosphere) {
         const v = document.createElement('video');
         v.src = video.url;
         v.autoplay = true;
-        v.muted = false;
+        v.muted = false; // Start with sound enabled
         v.controls = true;
         v.playsInline = true;
+        v.preload = "auto";
         v.style.width = "100%";
         v.style.height = "100%";
         v.style.objectFit = "contain";
@@ -391,7 +429,6 @@ function renderResults(date, video, atmosphere) {
 
         v.onplay = () => {
             if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-            try { connectAudioSource(v); } catch (e) { }
         };
 
         // CRITICAL PRINCIPLE: Video MUST ONLY switch AFTER video finishes playing (ended event)
@@ -410,10 +447,11 @@ function renderResults(date, video, atmosphere) {
             }
         };
 
+        // Handle autoplay policy with audio fallback cleanly
         const playPromise = v.play();
         if (playPromise !== undefined) {
             playPromise.catch(err => {
-                console.log("Autoplay with audio blocked by browser, attempting muted play...", err);
+                console.log("Autoplay with audio blocked by browser, playing muted until user click...", err);
                 v.muted = true;
                 v.play().catch(e => console.warn("Muted play failed:", e));
             });

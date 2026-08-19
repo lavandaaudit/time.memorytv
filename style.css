@@ -218,11 +218,75 @@ select:hover, select:focus {
     font-family: 'Syncopate', sans-serif;
 }
 
+/* Atmosphere Meta Badges */
+.atmosphere-meta-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px dashed rgba(0, 243, 255, 0.15);
+}
+
+.meta-badge {
+    background: rgba(0, 243, 255, 0.06);
+    border: 1px solid rgba(0, 243, 255, 0.2);
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.68rem;
+    color: var(--acc-cyan);
+    font-family: 'Space Grotesk', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.meta-badge.epoch {
+    background: rgba(112, 0, 255, 0.12);
+    border-color: rgba(112, 0, 255, 0.35);
+    color: #c4b5fd;
+}
+
+.meta-icon {
+    font-size: 0.78rem;
+}
+
 .ai-summary {
     font-size: 0.85rem;
     line-height: 1.45;
     color: #d1d5db;
-    font-style: italic;
+}
+
+.atmo-events-container {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.75rem;
+    color: #bbb;
+}
+
+.event-item {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 0.35rem;
+    align-items: flex-start;
+}
+
+.event-year {
+    color: var(--acc-cyan);
+    font-weight: bold;
+    font-family: 'Syncopate', sans-serif;
+    font-size: 0.62rem;
+    min-width: 44px;
+    background: rgba(0, 243, 255, 0.08);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    text-align: center;
+}
+
+.event-text {
+    flex: 1;
+    line-height: 1.35;
 }
 
 /* Screen / Video Player Card */

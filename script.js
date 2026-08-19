@@ -9,6 +9,13 @@ const resultContainer = document.getElementById('resultContainer');
 const loader = document.getElementById('loader');
 const playerStatus = document.getElementById('playerStatus');
 
+// Atmosphere Card Elements
+const atmoDayOfWeek = document.getElementById('atmoDayOfWeek');
+const atmoMoon = document.getElementById('atmoMoon');
+const atmoEpoch = document.getElementById('atmoEpoch');
+const aiAtmosphere = document.getElementById('aiAtmosphere');
+const atmoEvents = document.getElementById('atmoEvents');
+
 let autoAdvanceTimer = null;
 let currentYear = 2026;
 let currentVideoElement = null;
@@ -105,7 +112,6 @@ async function createReverbPulse() {
     reverbNode.buffer = buf;
 }
 
-// Global user interaction listener to unlock AudioContext & Video Sound
 function unlockAudio() {
     if (audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -201,6 +207,96 @@ function loadNextVideo() {
     clearAllTimers();
     setRandomDate();
     exploreBtn.click();
+}
+
+// --- ATMOSPHERE HELPER FUNCTIONS ---
+function getDayOfWeekName(year, month, day) {
+    const days = ["Неділя", "Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота"];
+    const d = new Date(year, month - 1, day);
+    return days[d.getDay()] || "Невідомо";
+}
+
+function getMoonPhase(year, month, day) {
+    let y = year, m = month;
+    if (m < 3) {
+        y--;
+        m += 12;
+    }
+    m++;
+    let c = 365.25 * y;
+    let e = 30.6 * m;
+    let jd = c + e + day - 694039.09;
+    jd /= 29.5305882;
+    let b = parseInt(jd);
+    jd -= b;
+    let phase = Math.round(jd * 8) % 8;
+    const phases = [
+        { name: "Новий Місяць", icon: "🌑" },
+        { name: "Молодий Місяць", icon: "🌒" },
+        { name: "Перша Чверть", icon: "🌓" },
+        { name: "Зростаючий Місяць", icon: "🌔" },
+        { name: "Повний Місяць", icon: "🌕" },
+        { name: "Спадний Місяць", icon: "🌖" },
+        { name: "Остання Чверть", icon: "🌗" },
+        { name: "Старий Місяць", icon: "🌘" }
+    ];
+    return phases[phase];
+}
+
+function getEpochContext(year) {
+    if (year < 1920) return "Початок XX ст. • Ера авангарду";
+    if (year < 1930) return "Ревучі 20-ті • Епоха джазу";
+    if (year < 1945) return "Міжвоєнна епоха";
+    if (year < 1960) return "Повоєнна відбудова • Початок Космосу";
+    if (year < 1970) return "Шістдесяті • Рок-н-рол та Перший Політ";
+    if (year < 1980) return "70-ті • Диско, вініл, кольорове ТБ";
+    if (year < 1990) return "80-ті • Синтвейв, касети, перебудова";
+    if (year < 1998) return "90-ті • Незалежність України, VHS";
+    if (year < 2010) return "2000-ні • Цифровий вибух, соцмережі";
+    return "Сучасний цифровий вік • Штучний Інтелект";
+}
+
+async function fetchHistoricalEvents(month, day) {
+    const mm = month.toString().padStart(2, '0');
+    const dd = day.toString().padStart(2, '0');
+    const url = `https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${mm}/${dd}`;
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+        if (data && data.events && data.events.length) {
+            return data.events.slice(0, 3).map(e => ({
+                year: e.year,
+                text: e.text
+            }));
+        }
+    } catch (e) {
+        console.warn("Historical events fetch skipped:", e);
+    }
+    return [];
+}
+
+async function generateAtmosphereSummary(date) {
+    const [yStr, mStr, dStr] = date.split('-');
+    const year = parseInt(yStr);
+    const month = parseInt(mStr);
+    const day = parseInt(dStr);
+
+    const dayOfWeek = getDayOfWeekName(year, month, day);
+    const moon = getMoonPhase(year, month, day);
+    const epoch = getEpochContext(year);
+    const events = await fetchHistoricalEvents(month, day);
+
+    return {
+        dateStr: `${dStr}.${mStr}.${yStr}`,
+        dayOfWeek,
+        moon: `${moon.icon} ${moon.name}`,
+        epoch,
+        summaryText: `Хроніка часових координат ${dStr}.${mStr}.${yStr} (${dayOfWeek}). Астрономічна фаза: ${moon.name}. Епохальний шар: ${epoch}. Спектральний аналіз хроно-потоку стабільний.`,
+        events
+    };
 }
 
 // Initialization flow
@@ -301,7 +397,6 @@ async function fetchArchiveVideo(date) {
         const qMonth = `year:${year} AND date:${year}-${month}* AND mediatype:movies`;
         const qYear = `year:${year} AND mediatype:movies`;
 
-        // Run exact date & month search in parallel for fast resolution
         let [dataExact, dataMonth] = await Promise.all([
             fetchJson(searchUrl(qExact, 10)),
             fetchJson(searchUrl(qMonth, 10))
@@ -310,7 +405,6 @@ async function fetchArchiveVideo(date) {
         let items = dataExact?.response?.docs || [];
         if (!items.length) items = dataMonth?.response?.docs || [];
 
-        // Fallback to year search if exact & month had no records
         if (!items.length) {
             const dataYear = await fetchJson(searchUrl(qYear, 25));
             items = dataYear?.response?.docs || [];
@@ -320,10 +414,8 @@ async function fetchArchiveVideo(date) {
             return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null };
         }
 
-        // Shuffle top candidates to vary video selection
         const candidateItems = [...items].sort(() => Math.random() - 0.5).slice(0, 4);
 
-        // Parallel metadata fetch for all candidates
         const metadataResults = await Promise.all(
             candidateItems.map(item => {
                 if (metadataCache.has(item.identifier)) {
@@ -380,11 +472,6 @@ async function fetchArchiveVideo(date) {
     }
 }
 
-async function generateAtmosphereSummary(date) {
-    const dStr = date.split('-').reverse().join('.');
-    return `Аналітичний звіт ${dStr}. Спектральний аналіз завершено. Рівень фонової активності стабільний.`;
-}
-
 function handleVideoFailure(reason = "ПОМИЛКА ВІДЕО") {
     console.warn("Video playback failure:", reason);
     if (playerStatus) playerStatus.textContent = reason;
@@ -392,8 +479,37 @@ function handleVideoFailure(reason = "ПОМИЛКА ВІДЕО") {
 }
 
 function renderResults(date, video, atmosphere) {
-    document.getElementById('displayDate').textContent = date.split('-').reverse().join('.');
-    document.getElementById('aiAtmosphere').textContent = atmosphere;
+    document.getElementById('displayDate').textContent = atmosphere.dateStr || date.split('-').reverse().join('.');
+    
+    // Render Atmosphere Meta Badges
+    if (atmoDayOfWeek) atmoDayOfWeek.textContent = atmosphere.dayOfWeek || "--";
+    if (atmoMoon) atmoMoon.textContent = atmosphere.moon || "--";
+    if (atmoEpoch) atmoEpoch.textContent = atmosphere.epoch || "--";
+    
+    // Render Atmosphere Summary
+    if (aiAtmosphere) aiAtmosphere.textContent = atmosphere.summaryText || "Аналіз завершено.";
+    
+    // Render Historical Events List
+    if (atmoEvents) {
+        atmoEvents.innerHTML = '';
+        if (atmosphere.events && atmosphere.events.length) {
+            const headerEl = document.createElement('div');
+            headerEl.style.fontSize = '0.6rem';
+            headerEl.style.color = 'var(--acc-cyan)';
+            headerEl.style.fontFamily = 'Syncopate, sans-serif';
+            headerEl.style.marginBottom = '0.4rem';
+            headerEl.textContent = 'ЦЬОГО ДНЯ В ІСТОРІЇ:';
+            atmoEvents.appendChild(headerEl);
+
+            atmosphere.events.forEach(ev => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'event-item';
+                itemDiv.innerHTML = `<span class="event-year">${ev.year}</span><span class="event-text">${ev.text}</span>`;
+                atmoEvents.appendChild(itemDiv);
+            });
+        }
+    }
+
     document.getElementById('videoDesc').textContent = video.title || "Хроніка часу";
 
     const videoMedia = document.getElementById('videoMedia');
@@ -412,7 +528,7 @@ function renderResults(date, video, atmosphere) {
         const v = document.createElement('video');
         v.src = video.url;
         v.autoplay = true;
-        v.muted = false; // Start with sound enabled
+        v.muted = false;
         v.controls = true;
         v.playsInline = true;
         v.preload = "auto";
@@ -431,7 +547,6 @@ function renderResults(date, video, atmosphere) {
             if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         };
 
-        // CRITICAL PRINCIPLE: Video MUST ONLY switch AFTER video finishes playing (ended event)
         v.onended = () => {
             console.log("Video playback completed naturally. Loading next video...");
             if (playerStatus) playerStatus.textContent = "ВІДЕО ЗАВЕРШЕНО. НАСТУПНЕ...";
@@ -447,7 +562,6 @@ function renderResults(date, video, atmosphere) {
             }
         };
 
-        // Handle autoplay policy with audio fallback cleanly
         const playPromise = v.play();
         if (playPromise !== undefined) {
             playPromise.catch(err => {

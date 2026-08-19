@@ -9,8 +9,8 @@ const loader = document.getElementById('loader');
 const playerStatus = document.getElementById('playerStatus');
 
 let autoAdvanceTimer = null;
-let videoTimeoutTimer = null;
 let currentYear = 2026;
+let currentVideoElement = null;
 
 // Global Canvas (Background Stars)
 const canvas = document.getElementById('starsCanvas');
@@ -22,7 +22,12 @@ let delayNode, feedbackGain, reverbNode, reverbGain, chorusNode, chorusLFO, dron
 let masterGain;
 
 function initAudio() {
-    if (audioCtx) return;
+    if (audioCtx) {
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        return;
+    }
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -96,7 +101,7 @@ async function createReverbPulse() {
 
 function connectAudioSource(element) {
     if (!audioCtx) initAudio();
-    if (element.captured) return true;
+    if (!element || element.captured) return true;
 
     try {
         const source = audioCtx.createMediaElementSource(element);
@@ -105,7 +110,7 @@ function connectAudioSource(element) {
         element.captured = true;
         return true;
     } catch (e) {
-        console.warn("Audio capture blocked (CORS):", e);
+        console.warn("Audio capture skipped (CORS fallback active):", e);
         return false;
     }
 }
@@ -181,9 +186,11 @@ function clearAllTimers() {
         clearTimeout(autoAdvanceTimer);
         autoAdvanceTimer = null;
     }
-    if (videoTimeoutTimer) {
-        clearTimeout(videoTimeoutTimer);
-        videoTimeoutTimer = null;
+    if (currentVideoElement) {
+        currentVideoElement.onended = null;
+        currentVideoElement.onerror = null;
+        currentVideoElement.onplaying = null;
+        currentVideoElement = null;
     }
 }
 
@@ -199,19 +206,18 @@ animateStars();
 initSelectors();
 
 window.addEventListener('load', () => {
-    setTimeout(() => {
-        setRandomDate();
-        exploreBtn.click();
-        initAudio();
-    }, 500);
+    setRandomDate();
+    exploreBtn.click();
 });
 
 randomBtn.onclick = () => {
+    initAudio();
     loadNextVideo();
 };
 
 if (nextVideoBtn) {
     nextVideoBtn.onclick = () => {
+        initAudio();
         loadNextVideo();
     };
 }
@@ -221,6 +227,7 @@ window.onresize = () => {
 };
 
 exploreBtn.onclick = async () => {
+    initAudio();
     clearAllTimers();
     const d = daySelect.value;
     const m = monthSelect.value;
@@ -230,7 +237,7 @@ exploreBtn.onclick = async () => {
 
     resultContainer.classList.add('hidden');
     loader.classList.remove('hidden');
-    if (playerStatus) playerStatus.textContent = "ЗАВАНТАЖЕННЯ...";
+    if (playerStatus) playerStatus.textContent = "ПОШУК ХРОНІКИ...";
 
     try {
         const [archiveVideo, atmosphere] = await Promise.all([
@@ -240,7 +247,7 @@ exploreBtn.onclick = async () => {
         renderResults(selectedDate, archiveVideo, atmosphere);
     } catch (error) {
         console.error("Explore error:", error);
-        handleVideoFailure("ПОМИЛКА. ОНОВЛЕННЯ...");
+        handleVideoFailure("ПОМИЛКА ПОШУКУ. СПРОБУЙТЕ ЩЕ РАЗ");
     } finally {
         loader.classList.add('hidden');
         resultContainer.classList.remove('hidden');
@@ -251,7 +258,7 @@ async function fetchArchiveVideo(date) {
     const year = date.split('-')[0];
     const month = date.split('-')[1];
 
-    const searchArchive = async (query, limit = 5) => {
+    const searchArchive = async (query, limit = 15) => {
         const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}&output=json&limit=${limit}`;
         try {
             const res = await fetch(url);
@@ -264,43 +271,71 @@ async function fetchArchiveVideo(date) {
 
         // 1. Try exact date
         let data = await searchArchive(`date:${date} AND mediatype:movies`);
-        items = data.response.docs;
+        items = data.response.docs || [];
 
         // 2. Try month of year
-        if (!items || items.length === 0) {
-            data = await searchArchive(`year:${year} AND date:${year}-${month}* AND mediatype:movies`, 10);
-            items = data.response.docs;
+        if (!items.length) {
+            data = await searchArchive(`year:${year} AND date:${year}-${month}* AND mediatype:movies`, 15);
+            items = data.response.docs || [];
         }
 
         // 3. Try whole year
-        if (!items || items.length === 0) {
+        if (!items.length) {
             data = await searchArchive(`year:${year} AND mediatype:movies`, 50);
-            items = data.response.docs;
+            items = data.response.docs || [];
         }
 
-        if (!items || items.length === 0) {
+        if (!items.length) {
             return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null };
         }
 
-        const item = items[Math.floor(Math.random() * items.length)];
+        // Shuffle items to pick a random candidate
+        const shuffledItems = [...items].sort(() => Math.random() - 0.5);
 
-        try {
-            const metaRes = await fetch(`https://archive.org/metadata/${item.identifier}`);
-            const metaData = await metaRes.json();
-            let duration = 0;
-            let videoUrl = null;
+        for (const item of shuffledItems.slice(0, 5)) {
+            try {
+                const metaRes = await fetch(`https://archive.org/metadata/${item.identifier}`);
+                const metaData = await metaRes.json();
+                let duration = 0;
+                let videoUrl = null;
 
-            if (metaData.files) {
-                const videoFile = metaData.files.find(f => f.format === 'h.264' || f.format === 'MPEG4' || (f.name && f.name.toLowerCase().endsWith('.mp4')));
-                if (videoFile) {
-                    duration = parseFloat(videoFile.duration) || 0;
-                    videoUrl = `https://archive.org/download/${item.identifier}/${encodeURIComponent(videoFile.name)}`;
+                if (metaData.files && metaData.files.length) {
+                    // Filter candidate video files: prioritize MP4 / WebM, avoid tiny sample clips if possible
+                    const videoFiles = metaData.files.filter(f => {
+                        const name = (f.name || '').toLowerCase();
+                        const format = (f.format || '').toLowerCase();
+                        const isVideo = format.includes('h.264') || format.includes('mpeg4') || format.includes('mp4') || format.includes('webm') || name.endsWith('.mp4') || name.endsWith('.webm');
+                        return isVideo;
+                    });
+
+                    // Sort: prefer main videos (not preview/sample, duration > 10s)
+                    videoFiles.sort((a, b) => {
+                        const aSample = (a.name || '').toLowerCase().includes('sample') || (a.name || '').toLowerCase().includes('thumb');
+                        const bSample = (b.name || '').toLowerCase().includes('sample') || (b.name || '').toLowerCase().includes('thumb');
+                        if (aSample && !bSample) return 1;
+                        if (!aSample && bSample) return -1;
+                        return (parseFloat(b.duration) || 0) - (parseFloat(a.duration) || 0);
+                    });
+
+                    const chosenFile = videoFiles[0];
+                    if (chosenFile) {
+                        duration = parseFloat(chosenFile.duration) || 0;
+                        const safePath = chosenFile.name.split('/').map(encodeURIComponent).join('/');
+                        videoUrl = `https://archive.org/download/${item.identifier}/${safePath}`;
+                        return { title: item.title, id: item.identifier, duration: duration || 45, url: videoUrl };
+                    }
                 }
+
+                // If metadata files don't have direct video file, return item with id for embed fallback
+                if (item.identifier) {
+                    return { title: item.title, id: item.identifier, duration: 45, url: null };
+                }
+            } catch (e) {
+                console.warn("Failed fetching metadata for item:", item.identifier, e);
             }
-            return { title: item.title, id: item.identifier, duration: duration || 45, url: videoUrl };
-        } catch (e) {
-            return { title: item.title, id: item.identifier, duration: 45, url: null };
         }
+
+        return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null };
 
     } catch (e) {
         console.error("Archive Search Error:", e);
@@ -313,13 +348,10 @@ async function generateAtmosphereSummary(date) {
     return `Аналітичний звіт ${dStr}. Спектральний аналіз завершено. Рівень фонової активності стабільний.`;
 }
 
-function handleVideoFailure(reason = "ПОМИЛКА ЗАВАНТАЖЕННЯ. НАСТУПНЕ ВІДЕО...") {
+function handleVideoFailure(reason = "ПОМИЛКА ВІДЕО") {
     console.warn("Video playback failure:", reason);
     if (playerStatus) playerStatus.textContent = reason;
     clearAllTimers();
-    autoAdvanceTimer = setTimeout(() => {
-        loadNextVideo();
-    }, 1500);
 }
 
 function renderResults(date, video, atmosphere) {
@@ -329,13 +361,13 @@ function renderResults(date, video, atmosphere) {
 
     const videoMedia = document.getElementById('videoMedia');
     videoMedia.innerHTML = '';
+    clearAllTimers();
 
-    if (playerStatus) playerStatus.textContent = "АВТО-ПОТОК ● LIVE";
+    if (playerStatus) playerStatus.textContent = "ПОТІК ГОТОВИЙ";
 
-    // If no video was found for date, auto-retry next video immediately
     if (!video.url && !video.id) {
-        handleVideoFailure("ВІДЕО НЕ ЗНАЙДЕНО. ПЕРЕМИКАННЯ...");
-        videoMedia.innerHTML = `<div class="no-video-placeholder"><p>ПОШУК ВІДЕО-ХРОНІКИ...</p></div>`;
+        if (playerStatus) playerStatus.textContent = "ВІДЕО НЕ ЗНАЙДЕНО";
+        videoMedia.innerHTML = `<div class="no-video-placeholder"><p>ВІДЕО-ХРОНІКА ВІДСУТНЯ ДЛЯ ЦІЄЇ ДАТИ</p></div>`;
         return;
     }
 
@@ -343,29 +375,17 @@ function renderResults(date, video, atmosphere) {
         const v = document.createElement('video');
         v.src = video.url;
         v.autoplay = true;
-        v.muted = true;
+        v.muted = false;
         v.controls = true;
         v.playsInline = true;
-        v.crossOrigin = "anonymous";
         v.style.width = "100%";
         v.style.height = "100%";
-        v.style.objectFit = "cover";
+        v.style.objectFit = "contain";
         v.style.backgroundColor = "#000";
 
-        // Setup safety load timeout: if video stays stalled/unloaded for > 8s
-        videoTimeoutTimer = setTimeout(() => {
-            if (v.readyState < 2) {
-                console.warn("Video loading timeout (>8s). Attempting fallback / next video...");
-                if (video.id) {
-                    loadIframeFallback(videoMedia, video);
-                } else {
-                    handleVideoFailure("ТАЙМАУТ ВІДЕО. ОНОВЛЕННЯ...");
-                }
-            }
-        }, 8000);
+        currentVideoElement = v;
 
         v.onplaying = () => {
-            if (videoTimeoutTimer) clearTimeout(videoTimeoutTimer);
             if (playerStatus) playerStatus.textContent = "ПОТІК АКТИВНИЙ ● LIVE";
         };
 
@@ -374,22 +394,30 @@ function renderResults(date, video, atmosphere) {
             try { connectAudioSource(v); } catch (e) { }
         };
 
-        // Automatic update when video finishes playing
+        // CRITICAL PRINCIPLE: Video MUST ONLY switch AFTER video finishes playing (ended event)
         v.onended = () => {
-            console.log("Video completed. Loading next video...");
+            console.log("Video playback completed naturally. Loading next video...");
             if (playerStatus) playerStatus.textContent = "ВІДЕО ЗАВЕРШЕНО. НАСТУПНЕ...";
             loadNextVideo();
         };
 
-        // Automatic recovery on video load/playback error
-        v.onerror = () => {
-            console.warn("Video failed to play. Trying iframe fallback or next video...");
+        v.onerror = (e) => {
+            console.warn("Direct video element error, trying iframe fallback...", e);
             if (video.id) {
                 loadIframeFallback(videoMedia, video);
             } else {
-                handleVideoFailure("ПОМИЛКА ВІДЕО. ОНОВЛЕННЯ...");
+                handleVideoFailure("ПОМИЛКА ВІДТВОРЕННЯ ВІДЕО");
             }
         };
+
+        const playPromise = v.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(err => {
+                console.log("Autoplay with audio blocked by browser, attempting muted play...", err);
+                v.muted = true;
+                v.play().catch(e => console.warn("Muted play failed:", e));
+            });
+        }
 
         videoMedia.appendChild(v);
         addFullscreenButton(videoMedia);
@@ -401,14 +429,26 @@ function renderResults(date, video, atmosphere) {
 
 function loadIframeFallback(container, video) {
     if (playerStatus) playerStatus.textContent = "ПОТІК EMBED ● LIVE";
-    container.innerHTML = `<iframe id="activeIframe" src="https://archive.org/embed/${video.id}?autoplay=1&mute=1" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+    container.innerHTML = `<iframe id="activeIframe" src="https://archive.org/embed/${video.id}?autoplay=1" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
     addFullscreenButton(container);
 
-    // For iframe fallback, set auto-advance timer based on duration (or fallback 45s)
-    const dur = (video.duration && video.duration > 5) ? video.duration : 45;
+    const messageHandler = (event) => {
+        if (event.data) {
+            const dataStr = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+            if (dataStr.includes('ended') || dataStr.includes('finish')) {
+                console.log("Iframe postMessage received video ended. Loading next...");
+                window.removeEventListener('message', messageHandler);
+                loadNextVideo();
+            }
+        }
+    };
+    window.addEventListener('message', messageHandler);
+
+    const dur = (video.duration && video.duration > 10) ? video.duration + 5 : 60;
     clearAllTimers();
     autoAdvanceTimer = setTimeout(() => {
-        console.log("Iframe duration completed. Loading next video...");
+        console.log("Iframe duration timer completed. Loading next video...");
+        window.removeEventListener('message', messageHandler);
         loadNextVideo();
     }, dur * 1000);
 }

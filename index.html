@@ -37,30 +37,13 @@
                 </div>
             </header>
 
-            <!-- Centered Screen & Atmosphere Content -->
+            <!-- Screen / Video Player Only -->
             <section id="resultContainer" class="hidden">
                 <div class="player-container-wrapper">
-                    <!-- Compact Atmosphere Card -->
-                    <div class="memory-block atmosphere-card">
-                        <div class="atmo-compact-row">
-                            <span class="block-tag">АТМОСФЕРА ДНЯ</span>
-                            <div class="atmosphere-meta-grid">
-                                <div class="meta-badge"><span class="meta-icon">📅</span> <span id="atmoDayOfWeek">--</span></div>
-                                <div class="meta-badge"><span class="meta-icon">🌙</span> <span id="atmoMoon">--</span></div>
-                                <div class="meta-badge epoch"><span class="meta-icon">📜</span> <span id="atmoEpoch">--</span></div>
-                            </div>
-                            <span id="displayDate" class="atmo-date">--.--.----</span>
-                        </div>
-
-                        <div id="aiAtmosphere" class="ai-summary">
-                            Координати часу зчитуються...
-                        </div>
-                    </div>
-
-                    <!-- Screen / Video Player Card -->
                     <div class="memory-block video-player-card">
                         <div class="block-header">
                             <span class="block-tag">ЕКРАН | ХРОНІКА</span>
+                            <span id="displayDate" class="player-date-tag">--.--.----</span>
                             <span id="playerStatus" class="player-status-tag">АВТО-ПОТОК</span>
                         </div>
                         <div class="media-container" id="videoMedia"></div>
@@ -68,14 +51,6 @@
                             <p id="videoDesc" class="media-desc"></p>
                             <button id="nextVideoBtn" class="next-btn" title="Наступне відео">⏭ НАСТУПНЕ ВІДЕО</button>
                         </div>
-                    </div>
-
-                    <!-- On This Day In History Card Below Video Player -->
-                    <div class="memory-block history-events-card">
-                        <div class="block-header">
-                            <span class="block-tag">ЦЬОГО ДНЯ В ІСТОРІЇ</span>
-                        </div>
-                        <div id="atmoEvents" class="atmo-events-container"></div>
                     </div>
                 </div>
             </section>

@@ -257,11 +257,18 @@ select:hover, select:focus {
     color: #d1d5db;
 }
 
+/* History Events Card Below Video Player */
+.history-events-card {
+    background: rgba(12, 12, 18, 0.5);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.8rem 1.2rem;
+}
+
 .atmo-events-container {
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    font-size: 0.75rem;
+    margin-top: 0.4rem;
+    font-size: 0.76rem;
     color: #bbb;
 }
 

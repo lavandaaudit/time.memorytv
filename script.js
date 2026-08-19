@@ -489,24 +489,18 @@ function renderResults(date, video, atmosphere) {
     // Render Atmosphere Summary
     if (aiAtmosphere) aiAtmosphere.textContent = atmosphere.summaryText || "Аналіз завершено.";
     
-    // Render Historical Events List
+    // Render Historical Events List Below Video Player
     if (atmoEvents) {
         atmoEvents.innerHTML = '';
         if (atmosphere.events && atmosphere.events.length) {
-            const headerEl = document.createElement('div');
-            headerEl.style.fontSize = '0.6rem';
-            headerEl.style.color = 'var(--acc-cyan)';
-            headerEl.style.fontFamily = 'Syncopate, sans-serif';
-            headerEl.style.marginBottom = '0.4rem';
-            headerEl.textContent = 'ЦЬОГО ДНЯ В ІСТОРІЇ:';
-            atmoEvents.appendChild(headerEl);
-
             atmosphere.events.forEach(ev => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'event-item';
                 itemDiv.innerHTML = `<span class="event-year">${ev.year}</span><span class="event-text">${ev.text}</span>`;
                 atmoEvents.appendChild(itemDiv);
             });
+        } else {
+            atmoEvents.innerHTML = `<p style="font-size:0.75rem; color:#888;">Історичні записи за цей день уточнюються...</p>`;
         }
     }
 
